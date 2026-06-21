@@ -54,32 +54,43 @@ variables:
       - wheelhouse/*.whl
     expire_in: 1 week
 
-linux:py311:
+# Python matrix runs each job once per interpreter. The official python:<ver> images
+# provide the right `python`; macOS/Windows runners must have python3.11/3.13/3.14 installed.
+linux:
   extends: .build_unix
-  image: ubuntu:22.04
+  image: python:$PYTHON_VERSION-bookworm
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.11", "3.13", "3.14"]
   before_script:
     - apt-get update
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y python3.11 python3.11-venv python3-pip build-essential git cmake ninja-build patchelf
-    - python3.11 -m venv .venv
-    - . .venv/bin/activate
-    - python -m pip install auditwheel
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential git ninja-build patchelf
+    - python -m pip install --upgrade pip auditwheel
   tags: [linux]
 
-# Requires a configured macOS runner.
-macos:py311:
+# Requires a configured macOS runner with python3.11/3.13/3.14 available.
+macos:
   extends: .build_unix
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.11", "3.13", "3.14"]
   before_script:
-    - python3 -m venv .venv
+    - "python$PYTHON_VERSION -m venv .venv"
     - . .venv/bin/activate
     - python -m pip install -U pip delocate
     - brew install ninja || true   # cmake comes from pip (cmake<4) in the build script
   tags: [macos]
 
-# Requires a configured Windows runner with Visual Studio Build Tools.
-windows:py311:
+# Requires a configured Windows runner with VS Build Tools and py launcher 3.11/3.13/3.14.
+windows:
   stage: build
   <<: *rules
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.11", "3.13", "3.14"]
   before_script:
+    - "py -$env:PYTHON_VERSION -m venv .venv"
+    - .venv\Scripts\Activate.ps1
     - python -m pip install -U pip build setuptools wheel pytest delvewheel PyOpenGL PySide6 jinja2 "cmake<4"
   script:
     - |
