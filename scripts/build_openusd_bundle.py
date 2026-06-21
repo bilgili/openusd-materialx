@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _build_utils import clone_or_update, prepend_env_path, run
+from _build_utils import clone_or_update, prepend_env_path, rmtree, run
 from materialx_build import (
     DEFAULT_MATERIALX_REF,
     DEFAULT_MATERIALX_REPO,
@@ -144,7 +144,7 @@ def copy_install_tree(install_dir: Path, package_usd_dir: Path) -> None:
         raise RuntimeError(f"OpenUSD install dir does not exist: {install_dir}")
 
     if package_usd_dir.exists():
-        shutil.rmtree(package_usd_dir)
+        rmtree(package_usd_dir)
 
     ignore = shutil.ignore_patterns(
         "*.a",
@@ -313,11 +313,11 @@ def main() -> None:
     if args.clean:
         for path in [args.install_dir, args.package_usd_dir, args.materialx_build_dir]:
             if path.exists():
-                shutil.rmtree(path)
+                rmtree(path)
         if args.source_dir.exists() and args.ref != "none":
-            shutil.rmtree(args.source_dir)
+            rmtree(args.source_dir)
         if args.materialx_source_dir.exists() and not args.skip_materialx_build and args.materialx_dir is None:
-            shutil.rmtree(args.materialx_source_dir)
+            rmtree(args.materialx_source_dir)
 
     materialx_cmake_dir: Path | None = args.materialx_dir
 

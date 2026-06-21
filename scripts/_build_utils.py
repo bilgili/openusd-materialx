@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +11,29 @@ from pathlib import Path
 def run(cmd: list[str], cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(str(c) for c in cmd), flush=True)
     subprocess.check_call(cmd, cwd=str(cwd) if cwd else None, env=env)
+
+
+def rmtree(path: Path) -> None:
+    """shutil.rmtree that survives Windows read-only files (e.g. git pack files under .git).
+
+    On Windows shutil.rmtree raises PermissionError(WinError 5) on read-only files; clear the
+    read-only bit and retry. Supports both the 3.12+ ``onexc`` and older ``onerror`` callbacks.
+    """
+    path = Path(path)
+    if not path.exists():
+        return
+
+    def _clear_and_retry(func, target, _exc):  # noqa: ANN001
+        try:
+            os.chmod(target, stat.S_IWRITE)
+            func(target)
+        except OSError:
+            pass
+
+    try:
+        shutil.rmtree(path, onexc=_clear_and_retry)  # Python 3.12+
+    except TypeError:
+        shutil.rmtree(path, onerror=_clear_and_retry)  # Python < 3.12
 
 
 def clone_or_update(repo_url: str, ref: str, source_dir: Path, *, recursive: bool = True) -> None:
@@ -38,7 +62,7 @@ def clone_or_update(repo_url: str, ref: str, source_dir: Path, *, recursive: boo
     except subprocess.CalledProcessError:
         # A commit SHA cannot always be shallow-cloned with --branch.
         if source_dir.exists():
-            shutil.rmtree(source_dir)
+            rmtree(source_dir)
         run(["git", "clone", "--depth", "1", repo_url, str(source_dir)])
         run(["git", "fetch", "--tags", "--depth", "1", "origin", ref], cwd=source_dir)
         run(["git", "checkout", ref], cwd=source_dir)
@@ -66,7 +90,7 @@ def copy_tree(src: Path, dst: Path, *, ignore: shutil.IgnorePattern | None = Non
     if not src.exists():
         raise RuntimeError(f"Source directory does not exist: {src}")
     if dst.exists():
-        shutil.rmtree(dst)
+        rmtree(dst)
     shutil.copytree(src, dst, ignore=ignore)
 
 
@@ -74,7 +98,7 @@ def remove_paths(paths: list[Path]) -> None:
     for path in paths:
         if path.exists():
             if path.is_dir():
-                shutil.rmtree(path)
+                rmtree(path)
             else:
                 path.unlink()
 

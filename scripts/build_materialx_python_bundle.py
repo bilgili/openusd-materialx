@@ -6,6 +6,7 @@ import os
 import shutil
 from pathlib import Path
 
+from _build_utils import rmtree
 from materialx_build import DEFAULT_MATERIALX_REF, DEFAULT_MATERIALX_REPO, build_materialx
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +22,7 @@ def copy_materialx_install_tree(install_dir: Path, package_bundle_dir: Path) -> 
         raise RuntimeError(f"MaterialX install dir does not exist: {install_dir}")
 
     if package_bundle_dir.exists():
-        shutil.rmtree(package_bundle_dir)
+        rmtree(package_bundle_dir)
 
     ignore = shutil.ignore_patterns(
         "*.a",

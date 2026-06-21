@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 try:
-    from _build_utils import cmake_generator_args, clone_or_update, run
+    from _build_utils import cmake_generator_args, clone_or_update, rmtree, run
 except ImportError:  # pragma: no cover
-    from scripts._build_utils import cmake_generator_args, clone_or_update, run
+    from scripts._build_utils import cmake_generator_args, clone_or_update, rmtree, run
 
 DEFAULT_MATERIALX_REPO = "https://github.com/AcademySoftwareFoundation/MaterialX.git"
 DEFAULT_MATERIALX_REF = "main"
@@ -89,9 +89,9 @@ def build_materialx(
     if clean:
         for path in [build_dir, install_dir]:
             if path.exists():
-                shutil.rmtree(path)
+                rmtree(path)
         if source_dir.exists() and not skip_checkout:
-            shutil.rmtree(source_dir)
+            rmtree(source_dir)
 
     if not skip_checkout:
         clone_or_update(repo_url, ref, source_dir, recursive=True)
