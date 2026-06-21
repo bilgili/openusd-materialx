@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-13, macos-14, windows-2022]
+        os: [ubuntu-22.04, macos-14, macos-15, macos-26, windows-2022]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     env:
       BUILD_PKG: ${{ inputs.package || 'both' }}
@@ -131,8 +131,8 @@ jobs:
         shell: bash
         run: |
           EXTRA=""
-          if [[ "${{ matrix.os }}" == "macos-14" ]]; then
-            EXTRA="--build-target arm64"
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            EXTRA="--build-target arm64"   # macos-14/15/26 runners are all arm64
           fi
           python scripts/build_openusd_bundle.py \
             --ref "$OPENUSD_REF" \
