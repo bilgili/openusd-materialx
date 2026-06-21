@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=69", "wheel", "delocate"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openusd-materialx"
+dynamic = ["version"]
+description = "Prebuilt OpenUSD Python package scaffold with bundled usdMtlx MaterialX plugin"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0 OR custom; see bundled third-party licenses" }
+authors = [
+  { name = "Your Name", email = "you@example.com" }
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/openusd-materialx-wheel"
+Repository = "https://github.com/your-org/openusd-materialx-wheel"
+
+[project.scripts]
+openusd-materialx-info = "openusd_materialx.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+openusd_materialx = [
+  "py.typed",
+  "_usd/**/*",
+  "_usd/**/**/*",
+  "_usd/**/**/**/*",
+  "_usd/**/**/**/**/*",
+]

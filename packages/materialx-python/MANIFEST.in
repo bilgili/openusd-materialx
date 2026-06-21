@@ -1,0 +1,4 @@
+recursive-include src/materialx_python/_materialx *
+include src/materialx_python/py.typed
+include src/MaterialX/py.typed
+include README.md

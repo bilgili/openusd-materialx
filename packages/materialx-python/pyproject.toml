@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "materialx-python-standalone"
+dynamic = ["version"]
+description = "Standalone MaterialX Python wheel scaffold built from ASWF MaterialX source"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0; see bundled third-party licenses" }
+authors = [
+  { name = "Your Name", email = "you@example.com" }
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/openusd-materialx-wheel"
+Repository = "https://github.com/your-org/openusd-materialx-wheel"
+
+[project.scripts]
+materialx-python-info = "materialx_python.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+materialx_python = [
+  "py.typed",
+  "_materialx/**/*",
+  "_materialx/**/**/*",
+  "_materialx/**/**/**/*",
+  "_materialx/**/**/**/**/*",
+]
+MaterialX = ["py.typed"]

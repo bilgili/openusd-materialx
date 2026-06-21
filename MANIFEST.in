@@ -1,0 +1,3 @@
+recursive-include src/openusd_materialx/_usd *
+include src/openusd_materialx/py.typed
+include README.md

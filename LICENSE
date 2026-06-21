@@ -1,0 +1,5 @@
+This starter repository is provided under the Apache License 2.0.
+
+Important: generated wheels may redistribute OpenUSD, MaterialX, and their dependencies.
+You must include and comply with the license terms of every bundled third-party component
+before publishing wheels.

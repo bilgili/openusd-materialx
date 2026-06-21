@@ -1,0 +1,23 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+build/
+dist/
+wheelhouse/
+*.whl
+*.tar.gz
+src/openusd_materialx/_usd/
+_openusd_src/
+_openusd_install/
+_materialx_src/
+_materialx_build/
+_materialx_install/
+_materialx_for_usd_build/
+# Prebuilt native bundles are platform-specific and rebuilt by CI (--clean); don't commit.
+packages/materialx-python/src/materialx_python/_materialx/

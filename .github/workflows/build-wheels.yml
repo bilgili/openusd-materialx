@@ -1,0 +1,174 @@
+name: Build wheels
+
+# Versions are fully variable:
+#   * openusd_ref / materialx_ref pick the upstream sources to build.
+#   * The wheel version comes from the pushed git tag (tag v1.2.3 -> wheels 1.2.3),
+#     or from package_version on a manual run, or 0.0.0 for untagged dev runs.
+# Wheels are uploaded as job artifacts only (no package registry publish).
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Which wheel(s) to build"
+        type: choice
+        default: both
+        options: [both, openusd-materialx, materialx-python]
+      openusd_ref:
+        description: "OpenUSD git tag/branch/sha"
+        type: string
+        default: "v26.05"
+      materialx_ref:
+        description: "MaterialX git tag/branch/sha (main = latest source)"
+        type: string
+        default: "main"
+      openusd_profile:
+        description: "OpenUSD build profile"
+        type: choice
+        default: full
+        options: [full, default, minimal]
+      package_version:
+        description: "Override wheel version (default: git tag, else 0.0.0)"
+        type: string
+        default: ""
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    name: ${{ matrix.os }} py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-13, macos-14, windows-2022]
+        python-version: ["3.10", "3.11", "3.12"]
+    env:
+      BUILD_PKG: ${{ inputs.package || 'both' }}
+      OPENUSD_REF: ${{ inputs.openusd_ref || 'v26.05' }}
+      MATERIALX_REF: ${{ inputs.materialx_ref || 'main' }}
+      OPENUSD_BUILD_PROFILE: ${{ inputs.openusd_profile || 'full' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Resolve PACKAGE_VERSION
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.package_version }}" ]]; then
+            V="${{ inputs.package_version }}"
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            V="$GITHUB_REF_NAME"
+          else
+            V="0.0.0"
+          fi
+          V="${V#v}"
+          echo "PACKAGE_VERSION=$V" >> "$GITHUB_ENV"
+          echo "Resolved PACKAGE_VERSION=$V (openusd=$OPENUSD_REF materialx=$MATERIALX_REF profile=$OPENUSD_BUILD_PROFILE pkg=$BUILD_PKG)"
+
+      - name: Install Python build tools
+        # PyOpenGL/PySide6 are usdview build deps; jinja2 enables usdGenSchema/usdInitSchema.
+        # cmake<4: CMake 4 dropped OLD policy support (CMP0042) that OpenUSD v26.05's
+        # bundled deps (Alembic, etc.) still set, so pin a 3.x CMake on the PATH.
+        run: python -m pip install -U pip build setuptools wheel pytest PyOpenGL PySide6 jinja2 "cmake<4"
+
+      - name: Install platform dependencies - Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git cmake ninja-build patchelf python3-dev
+          python -m pip install auditwheel
+
+      - name: Install platform dependencies - macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja || true   # cmake comes from pip (cmake<4) above
+          python -m pip install delocate
+
+      - name: Install platform dependencies - Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install ninja -y   # cmake comes from pip (cmake<4) above
+          python -m pip install delvewheel
+
+      # --- materialx-python-standalone -----------------------------------------
+      - name: Build MaterialX standalone bundle
+        if: env.BUILD_PKG == 'both' || env.BUILD_PKG == 'materialx-python'
+        shell: bash
+        run: python scripts/build_materialx_python_bundle.py --ref "$MATERIALX_REF" --clean
+
+      - name: Validate MaterialX bundle
+        if: env.BUILD_PKG == 'both' || env.BUILD_PKG == 'materialx-python'
+        run: python packages/materialx-python/scripts/validate_materialx_bundle.py
+
+      - name: Build MaterialX wheel
+        if: env.BUILD_PKG == 'both' || env.BUILD_PKG == 'materialx-python'
+        run: python -m build --wheel --outdir wheelhouse/raw/materialx packages/materialx-python
+
+      - name: Repair MaterialX wheel - Linux/macOS
+        if: (env.BUILD_PKG == 'both' || env.BUILD_PKG == 'materialx-python') && runner.os != 'Windows'
+        shell: bash
+        run: python scripts/repair_wheel.py wheelhouse/raw/materialx/*.whl --out-dir wheelhouse
+
+      - name: Repair MaterialX wheel - Windows
+        if: (env.BUILD_PKG == 'both' || env.BUILD_PKG == 'materialx-python') && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $w = Get-ChildItem wheelhouse/raw/materialx/*.whl | Select-Object -First 1
+          python scripts/repair_wheel.py $w.FullName --out-dir wheelhouse
+
+      # --- openusd-materialx ---------------------------------------------------
+      - name: Build OpenUSD + usdMtlx bundle
+        if: env.BUILD_PKG == 'both' || env.BUILD_PKG == 'openusd-materialx'
+        shell: bash
+        run: |
+          EXTRA=""
+          if [[ "${{ matrix.os }}" == "macos-14" ]]; then
+            EXTRA="--build-target arm64"
+          fi
+          python scripts/build_openusd_bundle.py \
+            --ref "$OPENUSD_REF" \
+            --materialx-ref "$MATERIALX_REF" \
+            --profile "$OPENUSD_BUILD_PROFILE" \
+            --clean $EXTRA
+
+      - name: Validate OpenUSD bundle
+        if: env.BUILD_PKG == 'both' || env.BUILD_PKG == 'openusd-materialx'
+        run: python scripts/validate_bundle.py
+
+      # The OpenUSD wheel is NOT run through delocate/auditwheel: build_openusd_bundle.py
+      # already makes the _usd/ tree self-contained (strips the build-prefix rpath, re-signs),
+      # and wheel-repair tools break the deeply nested _usd/lib/python/pxr layout.
+      - name: Build OpenUSD wheel
+        if: env.BUILD_PKG == 'both' || env.BUILD_PKG == 'openusd-materialx'
+        run: python -m build --wheel --outdir wheelhouse
+
+      # --- smoke-test repaired wheels in a clean venv --------------------------
+      - name: Test repaired wheels
+        shell: bash
+        run: |
+          python -m venv .venv-test
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            source .venv-test/Scripts/activate
+          else
+            source .venv-test/bin/activate
+          fi
+          python -m pip install -U pip
+          if [[ "$BUILD_PKG" == "both" || "$BUILD_PKG" == "materialx-python" ]]; then
+            python -m pip install wheelhouse/materialx_python_standalone-*.whl
+            python -c "import MaterialX as mx; print('MaterialX', mx.getVersionString())"
+          fi
+          if [[ "$BUILD_PKG" == "both" || "$BUILD_PKG" == "openusd-materialx" ]]; then
+            python -m pip install wheelhouse/openusd_materialx-*.whl
+            python -m openusd_materialx --validate
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ env.BUILD_PKG }}-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
