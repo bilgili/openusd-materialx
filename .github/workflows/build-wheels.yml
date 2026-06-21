@@ -40,8 +40,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-14, macos-15, macos-26, windows-2022]
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        os: [ubuntu-22.04, macos-26, windows-2022]
+        python-version: ["3.12", "3.13", "3.14"]
     env:
       BUILD_PKG: ${{ inputs.package || 'both' }}
       OPENUSD_REF: ${{ inputs.openusd_ref || 'v26.05' }}
@@ -82,24 +82,24 @@ jobs:
           # mesa/GL + X11 dev libs: MaterialX builds MaterialXRenderGlsl, which find_package(OpenGL).
           sudo apt-get install -y build-essential git cmake ninja-build patchelf python3-dev \
             libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libxt-dev libxmu-dev libxi-dev
-          python -m pip install auditwheel
 
       - name: Install platform dependencies - macOS
         if: runner.os == 'macOS'
         run: |
           brew install ninja || true   # cmake comes from pip (cmake<4) above
-          python -m pip install delocate
-          # The wheel's universal2 tag (hosted Python) vs single-arch binaries is fixed in
-          # setup.py get_tag(), which retags universal2 -> the runner arch.
 
       - name: Install platform dependencies - Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           choco install ninja -y   # cmake comes from pip (cmake<4) above
-          python -m pip install delvewheel
 
       # --- materialx-python-standalone -----------------------------------------
+      # Like the OpenUSD wheel, the MaterialX wheel is NOT run through a wheel-repair tool
+      # (delocate/auditwheel/delvewheel). The bundle is self-contained: the dylibs/so carry
+      # @loader_path/$ORIGIN rpaths and the shim bootstrap wires PATH/(DY)LD_LIBRARY_PATH /
+      # os.add_dll_directory at import. The repair tools instead choke on the bundle layout
+      # (DLL/.pyd in separate subtrees, etc.). has_ext_modules in setup.py keeps it platlib.
       - name: Build MaterialX standalone bundle
         if: env.BUILD_PKG == 'both' || env.BUILD_PKG == 'materialx-python'
         shell: bash
@@ -111,19 +111,7 @@ jobs:
 
       - name: Build MaterialX wheel
         if: env.BUILD_PKG == 'both' || env.BUILD_PKG == 'materialx-python'
-        run: python -m build --wheel --outdir wheelhouse/raw/materialx packages/materialx-python
-
-      - name: Repair MaterialX wheel - Linux/macOS
-        if: (env.BUILD_PKG == 'both' || env.BUILD_PKG == 'materialx-python') && runner.os != 'Windows'
-        shell: bash
-        run: python scripts/repair_wheel.py wheelhouse/raw/materialx/*.whl --out-dir wheelhouse
-
-      - name: Repair MaterialX wheel - Windows
-        if: (env.BUILD_PKG == 'both' || env.BUILD_PKG == 'materialx-python') && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $w = Get-ChildItem wheelhouse/raw/materialx/*.whl | Select-Object -First 1
-          python scripts/repair_wheel.py $w.FullName --out-dir wheelhouse
+        run: python -m build --wheel --outdir wheelhouse packages/materialx-python
 
       # --- openusd-materialx ---------------------------------------------------
       - name: Build OpenUSD + usdMtlx bundle

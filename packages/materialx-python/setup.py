@@ -4,10 +4,20 @@ import os
 import platform
 
 from setuptools import setup
+from setuptools.dist import Distribution
 from wheel.bdist_wheel import bdist_wheel
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUNDLE_DIR = os.path.join(HERE, "src", "materialx_python", "_materialx")
+
+
+class BinaryDistribution(Distribution):
+    """Force platlib placement so the bundled .so/.dylib live under site-packages, not
+    under .data/purelib. Without this auditwheel rejects the wheel: "found shared
+    library/libraries in purelib folder; wheel has to be platlib compliant"."""
+
+    def has_ext_modules(self) -> bool:  # noqa: D401
+        return True
 
 
 class BinaryBdistWheel(bdist_wheel):
@@ -58,4 +68,4 @@ def _package_version() -> str:
     return version or "0.0.0"
 
 
-setup(version=_package_version(), cmdclass={"bdist_wheel": BinaryBdistWheel})
+setup(version=_package_version(), distclass=BinaryDistribution, cmdclass={"bdist_wheel": BinaryBdistWheel})

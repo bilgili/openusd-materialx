@@ -7,7 +7,7 @@ name = "openusd-materialx"
 dynamic = ["version"]
 description = "Prebuilt OpenUSD Python package scaffold with bundled usdMtlx MaterialX plugin"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "Apache-2.0 OR custom; see bundled third-party licenses" }
 authors = [
   { name = "Your Name", email = "you@example.com" }
@@ -15,8 +15,6 @@ authors = [
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",

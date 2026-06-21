@@ -38,8 +38,8 @@ variables:
       if [ "$BUILD_PKG" = "both" ] || [ "$BUILD_PKG" = "materialx-python" ]; then
         python scripts/build_materialx_python_bundle.py --ref "$MATERIALX_REF" --clean
         python packages/materialx-python/scripts/validate_materialx_bundle.py
-        python -m build --wheel --outdir wheelhouse/raw/materialx packages/materialx-python
-        python scripts/repair_wheel.py wheelhouse/raw/materialx/*.whl --out-dir wheelhouse
+        # No repair tool: the bundle is self-contained (rpaths + shim bootstrap).
+        python -m build --wheel --outdir wheelhouse packages/materialx-python
       fi
     - |
       if [ "$BUILD_PKG" = "both" ] || [ "$BUILD_PKG" = "openusd-materialx" ]; then
@@ -55,31 +55,31 @@ variables:
     expire_in: 1 week
 
 # Python matrix runs each job once per interpreter. The official python:<ver> images
-# provide the right `python`; macOS/Windows runners must have python3.11/3.13/3.14 installed.
+# provide the right `python`; macOS/Windows runners must have python3.12/3.13/3.14 installed.
 linux:
   extends: .build_unix
   image: python:$PYTHON_VERSION-bookworm
   parallel:
     matrix:
-      - PYTHON_VERSION: ["3.11", "3.13", "3.14"]
+      - PYTHON_VERSION: ["3.12", "3.13", "3.14"]
   before_script:
     - apt-get update
     # mesa/GL + X11 dev libs: MaterialX builds MaterialXRenderGlsl, which find_package(OpenGL).
     - DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential git ninja-build patchelf
         libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libx11-dev libxt-dev libxmu-dev libxi-dev
-    - python -m pip install --upgrade pip auditwheel
+    - python -m pip install --upgrade pip
   tags: [linux]
 
-# Requires a configured macOS runner with python3.11/3.13/3.14 available.
+# Requires a configured macOS runner with python3.12/3.13/3.14 available.
 macos:
   extends: .build_unix
   parallel:
     matrix:
-      - PYTHON_VERSION: ["3.11", "3.13", "3.14"]
+      - PYTHON_VERSION: ["3.12", "3.13", "3.14"]
   before_script:
     - "python$PYTHON_VERSION -m venv .venv"
     - . .venv/bin/activate
-    - python -m pip install -U pip delocate
+    - python -m pip install -U pip
     - brew install ninja || true   # cmake comes from pip (cmake<4) in the build script
     # universal2-vs-single-arch wheel tag is fixed in setup.py get_tag() (retag -> runner arch).
   tags: [macos]
@@ -90,11 +90,11 @@ windows:
   <<: *rules
   parallel:
     matrix:
-      - PYTHON_VERSION: ["3.11", "3.13", "3.14"]
+      - PYTHON_VERSION: ["3.12", "3.13", "3.14"]
   before_script:
     - "py -$env:PYTHON_VERSION -m venv .venv"
     - .venv\Scripts\Activate.ps1
-    - python -m pip install -U pip build setuptools wheel pytest delvewheel PyOpenGL PySide6 jinja2 "cmake<4"
+    - python -m pip install -U pip build setuptools wheel pytest PyOpenGL PySide6 jinja2 "cmake<4"
   script:
     - |
       if ($env:CI_COMMIT_TAG) { $env:PACKAGE_VERSION = ($env:CI_COMMIT_TAG -replace '^v','') } else { $env:PACKAGE_VERSION = '0.0.0' }
@@ -103,9 +103,8 @@ windows:
       if ($env:BUILD_PKG -eq 'both' -or $env:BUILD_PKG -eq 'materialx-python') {
         python scripts/build_materialx_python_bundle.py --ref "$env:MATERIALX_REF" --clean
         python packages/materialx-python/scripts/validate_materialx_bundle.py
-        python -m build --wheel --outdir wheelhouse/raw/materialx packages/materialx-python
-        $w = Get-ChildItem wheelhouse/raw/materialx/*.whl | Select-Object -First 1
-        python scripts/repair_wheel.py $w.FullName --out-dir wheelhouse
+        # No delvewheel: bundle is self-contained (DLLs found via os.add_dll_directory in shim).
+        python -m build --wheel --outdir wheelhouse packages/materialx-python
       }
     - |
       if ($env:BUILD_PKG -eq 'both' -or $env:BUILD_PKG -eq 'openusd-materialx') {

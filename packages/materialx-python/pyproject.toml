@@ -7,7 +7,7 @@ name = "materialx-python-standalone"
 dynamic = ["version"]
 description = "Standalone MaterialX Python wheel scaffold built from ASWF MaterialX source"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = { text = "Apache-2.0; see bundled third-party licenses" }
 authors = [
   { name = "Your Name", email = "you@example.com" }
@@ -15,9 +15,6 @@ authors = [
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",

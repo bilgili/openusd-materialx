@@ -75,16 +75,15 @@ version.
 
 ```bash
 python -m pip install -U pip build setuptools wheel
-# Install the platform wheel-repair tool that the last step (repair_wheel.py) needs:
-#   macOS:   python -m pip install delocate
-#   Linux:   python -m pip install auditwheel   (also needs the system `patchelf`)
-#   Windows: python -m pip install delvewheel
-python -m pip install delocate
 python scripts/build_materialx_python_bundle.py --ref main --clean
 python packages/materialx-python/scripts/validate_materialx_bundle.py
-python -m build --wheel --outdir wheelhouse/raw/materialx packages/materialx-python
-python scripts/repair_wheel.py wheelhouse/raw/materialx/*.whl --out-dir wheelhouse
+python -m build --wheel --outdir wheelhouse packages/materialx-python
 ```
+
+The wheel is **not** run through delocate/auditwheel/delvewheel: the bundle is self-contained
+(its libraries carry `@loader_path`/`$ORIGIN` rpaths and the shim sets PATH /
+`(DY)LD_LIBRARY_PATH` / `os.add_dll_directory` at import), and those repair tools choke on the
+bundle's split DLL/`.pyd` layout. `has_ext_modules` in `setup.py` keeps the wheel platlib.
 
 Install and test:
 
