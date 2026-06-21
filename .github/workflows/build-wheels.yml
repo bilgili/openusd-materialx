@@ -4,7 +4,8 @@ name: Build wheels
 #   * openusd_ref / materialx_ref pick the upstream sources to build.
 #   * The wheel version comes from the pushed git tag (tag v1.2.3 -> wheels 1.2.3),
 #     or from package_version on a manual run, or 0.0.0 for untagged dev runs.
-# Wheels are uploaded as job artifacts only (no package registry publish).
+# Wheels are uploaded as job artifacts on every run. On a tag push (v*), the `release`
+# job additionally publishes a GitHub Release named after the tag with all wheels attached.
 on:
   workflow_dispatch:
     inputs:
@@ -164,3 +165,32 @@ jobs:
           name: wheels-${{ env.BUILD_PKG }}-${{ matrix.os }}-py${{ matrix.python-version }}
           path: wheelhouse/*.whl
           if-no-files-found: error
+
+  # Publish a GitHub Release named after the pushed tag, with every built wheel
+  # attached. Runs only on tag pushes (v*), after the whole build matrix succeeds.
+  release:
+    name: GitHub Release ${{ github.ref_name }}
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write   # required to create the release + upload assets
+    steps:
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true   # flatten every matrix artifact into dist/
+
+      - name: List wheels
+        run: ls -la dist
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*.whl

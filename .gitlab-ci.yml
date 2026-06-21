@@ -7,13 +7,16 @@
 #   BUILD_PKG              both | openusd-materialx | materialx-python  (default both)
 #
 # The wheel version comes from the git tag: pushing tag v1.2.3 builds wheels 1.2.3.
-# Untagged manual runs build 0.0.0. Wheels are exposed as job artifacts only.
+# Untagged manual runs build 0.0.0. Wheels are exposed as job artifacts; on a tag
+# pipeline the `release` job also uploads them to the generic package registry and
+# creates a GitLab Release named after the tag.
 #
 # Pipelines run on tags and on manual ("web") runs, not on every push (full OpenUSD
 # builds are heavy).
 
 stages:
   - build
+  - release
 
 variables:
   OPENUSD_REF: "v26.05"
@@ -119,3 +122,48 @@ windows:
       - wheelhouse/*.whl
     expire_in: 1 week
   tags: [windows]
+
+# Create a GitLab Release named after the pushed tag, with every built wheel.
+# Wheels are uploaded to the project's generic package registry, then linked as
+# release assets. Runs only on tag pipelines, after the build jobs succeed.
+release:
+  stage: release
+  rules:
+    - if: $CI_COMMIT_TAG
+  image:
+    name: registry.gitlab.com/gitlab-org/release-cli:latest
+    entrypoint: [""]
+  tags: [linux]
+  # Pull wheelhouse/*.whl from the build matrix. Linux is required; macOS/Windows are
+  # optional so the release still publishes if those runners are not configured.
+  needs:
+    - job: linux
+      artifacts: true
+    - job: macos
+      artifacts: true
+      optional: true
+    - job: windows
+      artifacts: true
+      optional: true
+  script:
+    - apk add --no-cache curl
+    - PKG_VER="${CI_COMMIT_TAG#v}"
+    - |
+      set -e
+      found=0
+      set --   # accumulate release-cli --assets-link args in positional params
+      for f in wheelhouse/*.whl; do
+        [ -e "$f" ] || continue
+        found=1
+        fname=$(basename "$f")
+        url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/openusd-materialx-wheels/${PKG_VER}/${fname}"
+        echo "Uploading ${fname} -> ${url}"
+        curl --fail --silent --show-error --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "$f" "$url"
+        set -- "$@" --assets-link "{\"name\":\"${fname}\",\"url\":\"${url}\",\"link_type\":\"package\"}"
+      done
+      if [ "$found" -eq 0 ]; then echo "No wheels found in wheelhouse/; aborting release." >&2; exit 1; fi
+      release-cli create \
+        --name "${CI_COMMIT_TAG}" \
+        --tag-name "${CI_COMMIT_TAG}" \
+        --description "Automated release for ${CI_COMMIT_TAG}. Wheels attached from the generic package registry." \
+        "$@"
