@@ -64,7 +64,9 @@ linux:
       - PYTHON_VERSION: ["3.11", "3.13", "3.14"]
   before_script:
     - apt-get update
+    # mesa/GL + X11 dev libs: MaterialX builds MaterialXRenderGlsl, which find_package(OpenGL).
     - DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential git ninja-build patchelf
+        libgl1-mesa-dev libglu1-mesa-dev mesa-common-dev libx11-dev libxt-dev libxmu-dev libxi-dev
     - python -m pip install --upgrade pip auditwheel
   tags: [linux]
 
@@ -79,6 +81,7 @@ macos:
     - . .venv/bin/activate
     - python -m pip install -U pip delocate
     - brew install ninja || true   # cmake comes from pip (cmake<4) in the build script
+    # universal2-vs-single-arch wheel tag is fixed in setup.py get_tag() (retag -> runner arch).
   tags: [macos]
 
 # Requires a configured Windows runner with VS Build Tools and py launcher 3.11/3.13/3.14.

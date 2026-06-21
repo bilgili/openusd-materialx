@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -46,7 +47,16 @@ def clone_or_update(repo_url: str, ref: str, source_dir: Path, *, recursive: boo
 
 
 def cmake_generator_args() -> list[str]:
-    """Prefer Ninja when installed, otherwise let CMake choose the platform default."""
+    """Prefer Ninja when installed, otherwise let CMake choose the platform default.
+
+    On Windows we deliberately do NOT force Ninja: with the Ninja generator CMake picks up
+    whatever compiler is first on PATH (often clang/MinGW on CI images), and MaterialX's
+    shared-lib dllimport/dllexport macros only compile under MSVC ("definition is marked
+    dllimport" errors otherwise). Letting CMake default to the Visual Studio generator makes
+    it locate MSVC itself, no vcvars activation required.
+    """
+    if sys.platform == "win32":
+        return []
     if shutil.which("ninja") or shutil.which("ninja-build"):
         return ["-G", "Ninja"]
     return []

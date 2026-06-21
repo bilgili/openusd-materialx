@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import platform
 
 from setuptools import setup
 from wheel.bdist_wheel import bdist_wheel
@@ -15,6 +16,15 @@ class BinaryBdistWheel(bdist_wheel):
     def finalize_options(self) -> None:
         super().finalize_options()
         self.root_is_pure = False
+
+    def get_tag(self):
+        python, abi, plat = super().get_tag()
+        # Hosted macOS Python is universal2, but the bundled OpenUSD libraries are built
+        # single-arch by build_usd.py. Retag universal2 -> the real arch so the wheel matches
+        # its binaries (the OpenUSD wheel is not delocated, so the tag must be truthful).
+        if plat.endswith("universal2"):
+            plat = plat[: -len("universal2")] + platform.machine()
+        return python, abi, plat
 
     def run(self) -> None:
         # Refuse to build a binary-less wheel. Without the bundled OpenUSD tree the
