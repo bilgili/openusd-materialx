@@ -62,7 +62,6 @@ PROFILE_ARGS: dict[str, list[str]] = {
         "--opencolorio",
         "--openvdb",
         "--alembic",
-        "--hdf5",
         "--draco",
         "--embree",
         "--onetbb",
@@ -85,7 +84,9 @@ FULL_USD_CMAKE_OPTIONS = [
     "-DPXR_BUILD_OPENCOLORIO_PLUGIN=TRUE",
     "-DPXR_BUILD_EMBREE_PLUGIN=TRUE",
     "-DPXR_BUILD_ALEMBIC_PLUGIN=TRUE",
-    "-DPXR_ENABLE_HDF5_SUPPORT=TRUE",
+    # No HDF5: build_usd.py v26.05 dropped the --hdf5 flag (so it never builds the HDF5
+    # dependency), and forcing PXR_ENABLE_HDF5_SUPPORT made the build fail with
+    # "Could NOT find HDF5". The Alembic plugin still works via the Ogawa backend.
     "-DPXR_BUILD_DRACO_PLUGIN=TRUE",
 ]
 
