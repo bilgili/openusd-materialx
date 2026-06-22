@@ -70,25 +70,8 @@ PROFILE_ARGS: dict[str, list[str]] = {
 
 FULL_USD_CMAKE_OPTIONS = [
     "-DPXR_ENABLE_PYTHON_SUPPORT=TRUE",
-    # Portability (all OSes): build the pxr Python modules + the boost::python-wrapping
-    # shared libraries WITHOUT linking a specific libpython, so the wheel imports on any
-    # matching CPython (Homebrew / python.org / conda / manylinux), not just the one the
-    # CI runner happened to use. Without this, OpenUSD bakes the build interpreter's
-    # absolute library path into every binary and the wheel fails at import with
-    # "Library not loaded" / "cannot open shared object file" on a different CPython.
-    #   * macOS: links `-undefined dynamic_lookup` instead of the Python.framework
-    #     (the CI's python.org/actions-setup-python framework path
-    #     /Library/Frameworks/Python.framework/.../Python doesn't exist on a Homebrew host).
-    #   * Linux: links `--allow-shlib-undefined` instead of libpython3.x.so.
-    #   * Windows: NO-OP — Packages.cmake guards this `AND NOT WIN32` and always links
-    #     pythonXX.lib (MSVC has no dynamic-lookup); Windows extension wheels are inherently
-    #     per-minor-version and resolve python3XX.dll via the host interpreter, which is fine.
-    # OpenUSD only auto-enables this for STATICALLY linked Python (sysconfig LDLIBRARY ending
-    # in .a); a macOS framework / Linux shared libpython is dynamic, so we MUST force it ON.
-    # With it ON, Packages.cmake sets PYTHON_LIBRARIES="" and the Python symbols resolve from
-    # the already-loaded host interpreter at import (how PyPI usd-core + the sibling MaterialX
-    # wheel ship portable wheels).
-    "-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON",
+    # PXR_PY_UNDEFINED_DYNAMIC_LOOKUP is added per-platform in build_usd_cmake_options()
+    # (macOS only) — on Linux it breaks linking the boost.python `exec_` executable.
     "-DPXR_ENABLE_MATERIALX_SUPPORT=TRUE",
     "-DPXR_ENABLE_GL_SUPPORT=TRUE",
     "-DPXR_BUILD_IMAGING=TRUE",
@@ -111,8 +94,6 @@ FULL_USD_CMAKE_OPTIONS = [
 
 DEFAULT_USD_CMAKE_OPTIONS = [
     "-DPXR_ENABLE_PYTHON_SUPPORT=TRUE",
-    # See FULL_USD_CMAKE_OPTIONS: force dynamic_lookup so the wheel is Python-portable.
-    "-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON",
     "-DPXR_ENABLE_MATERIALX_SUPPORT=TRUE",
     "-DPXR_BUILD_IMAGING=TRUE",
     "-DPXR_BUILD_USD_IMAGING=TRUE",
@@ -125,8 +106,6 @@ DEFAULT_USD_CMAKE_OPTIONS = [
 
 MINIMAL_USD_CMAKE_OPTIONS = [
     "-DPXR_ENABLE_PYTHON_SUPPORT=TRUE",
-    # See FULL_USD_CMAKE_OPTIONS: force dynamic_lookup so the wheel is Python-portable.
-    "-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON",
     "-DPXR_ENABLE_MATERIALX_SUPPORT=TRUE",
     "-DPXR_BUILD_IMAGING=FALSE",
     "-DPXR_BUILD_USD_IMAGING=FALSE",
@@ -265,6 +244,15 @@ def build_usd_cmake_options(profile: str, materialx_dir: Path | None, args: argp
 
     if materialx_dir:
         opts.append(f"-DMaterialX_DIR={materialx_dir}")
+
+    # Make the pxr binaries Python-portable on macOS only. The CI's python.org /
+    # actions-setup-python framework lives at an absolute path that doesn't exist on a
+    # Homebrew/conda host, so without dynamic_lookup the wheel fails to import there.
+    # Linux already resolves Python symbols across interpreters via the libpython soname,
+    # and forcing this on Linux breaks linking the boost.python `exec_` executable
+    # ("undefined reference to PyCMethod_New"). Windows: Packages.cmake makes it a no-op.
+    if sys.platform == "darwin":
+        opts.append("-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON")
 
     if args.enable_vulkan:
         opts.extend(["-DPXR_ENABLE_VULKAN_SUPPORT=TRUE"])
