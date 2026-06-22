@@ -164,6 +164,12 @@ def copy_install_tree(install_dir: Path, package_usd_dir: Path) -> None:
         # library twice and abort ("multiple debug symbol definitions"). Never bundle them.
         "build",
         "src",
+        # PXR_BUILD_TESTS installs a tests/ tree containing deliberately-malformed
+        # plugInfo.json fixtures (e.g. testSdfMetaDataPlugInfo with "bad_1"/"bad_10"
+        # entries). The bootstrap rglobs every plugInfo.json, so bundling these makes
+        # plugin registration / validate spew SdfSchema errors and fail. Tests are not
+        # part of the distributable runtime — never bundle them.
+        "tests",
         # libtbbmalloc_proxy is an optional malloc replacement USD never loads. It carries a
         # dangling @rpath/libtbbmalloc dependency with no usable rpath, which trips wheel
         # repair tools for no benefit.
