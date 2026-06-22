@@ -38,43 +38,43 @@ def _macho_python_offenders(usd_root: Path, binaries: list[Path]) -> list[str]:
 
 
 def _elf_python_offenders(usd_root: Path, binaries: list[Path]) -> list[str]:
-    # Prefer patchelf (prints just sonames); fall back to readelf -d.
+    # On Linux a DT_NEEDED on the bare libpython SONAME (libpython3.x.so.1.0) is portable:
+    # it resolves from the already-loaded interpreter at import, exactly like PyPI usd-core,
+    # and is required for the standalone USD executables (sdfdump, ...) to link at all. The
+    # only non-portable case is an absolute RPATH/RUNPATH baked at build time that points
+    # into a specific Python install, so check that instead of the SONAME dependency.
     patchelf = shutil.which("patchelf")
-    readelf = shutil.which("readelf")
-    if not patchelf and not readelf:
-        print("WARNING: neither patchelf nor readelf found; skipping Linux Python-portability check.")
+    if not patchelf:
+        print("WARNING: patchelf not found; skipping Linux Python-portability check.")
         return []
-    bad_dep = re.compile(r"libpython[0-9.]*\.so")
+    abs_python = re.compile(r"python", re.IGNORECASE)
     offenders: list[str] = []
     for f in binaries:
-        needed = ""
         try:
-            if patchelf:
-                needed = subprocess.check_output([patchelf, "--print-needed", str(f)], text=True, stderr=subprocess.DEVNULL)
-            else:
-                needed = subprocess.check_output([readelf, "-d", str(f)], text=True, stderr=subprocess.DEVNULL)
+            rpath = subprocess.check_output(
+                [patchelf, "--print-rpath", str(f)], text=True, stderr=subprocess.DEVNULL
+            ).strip()
         except subprocess.CalledProcessError:
             continue
-        for line in needed.splitlines():
-            if bad_dep.search(line):
-                # readelf line: "0x... (NEEDED) Shared library: [libpython3.13.so.1.0]"
-                m = re.search(r"libpython[0-9.]*\.so[0-9.]*", line)
-                offenders.append(f"{f.relative_to(usd_root)} -> {m.group(0) if m else line.strip()}")
+        for entry in rpath.split(":"):
+            if entry.startswith("/") and abs_python.search(entry):
+                offenders.append(f"{f.relative_to(usd_root)} -> RPATH {entry}")
                 break
     return offenders
 
 
 def check_python_portability(usd_root: Path) -> list[str]:
-    """Return bundled binaries that hardcode a Python dependency (non-portable wheel).
+    """Return bundled binaries that hardcode an *absolute* Python dependency (non-portable).
 
-    OpenUSD must be built with PXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON so the pxr binaries do
-    NOT link a specific libpython. Otherwise the build interpreter's library is baked in
-    and the wheel only imports on that exact Python, failing on a different CPython with:
-      * macOS: "Library not loaded: .../Python.framework/.../Python"
-      * Linux: "libpython3.x.so: cannot open shared object file"
-    This guard catches a regression of that build flag before the wheel ships. Windows is
-    intentionally NOT checked: extension modules MUST link pythonXX.lib there and the wheel
-    is per-minor-version by design (python3XX.dll resolves from the host interpreter).
+    A wheel is portable when the pxr binaries reference Python only by something that
+    resolves from the loaded interpreter, not by a build-time absolute path:
+      * macOS: built with PXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON (no Python.framework link);
+        a residual absolute ``.../Python.framework/.../Python`` or ``/.../libpython*.dylib``
+        is the failure ("Library not loaded" on a different CPython).
+      * Linux: links libpython by bare SONAME (portable, like usd-core); only an absolute
+        RPATH/RUNPATH into a specific Python install is non-portable.
+    Windows is intentionally NOT checked: extension modules MUST link pythonXX.lib and the
+    wheel is per-minor-version by design (python3XX.dll resolves from the host interpreter).
     """
     binaries = [f for f in usd_root.rglob("*") if f.suffix in {".so", ".dylib"} and f.is_file()]
     if sys.platform == "darwin":
@@ -95,7 +95,8 @@ offenders = check_python_portability(usd_root)
 if offenders:
     print(
         "ERROR: bundled binaries hardcode an absolute Python dependency (wheel is not "
-        "Python-portable). Rebuild with -DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON. Offenders:"
+        "Python-portable). On macOS rebuild with -DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON; on "
+        "Linux strip the absolute Python RPATH. Offenders:"
     )
     for line in offenders[:20]:
         print("  ", line)

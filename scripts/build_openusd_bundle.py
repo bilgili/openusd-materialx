@@ -74,8 +74,8 @@ PROFILE_ARGS: dict[str, list[str]] = {
 
 FULL_USD_CMAKE_OPTIONS = [
     "-DPXR_ENABLE_PYTHON_SUPPORT=TRUE",
-    # PXR_PY_UNDEFINED_DYNAMIC_LOOKUP is added unconditionally in build_usd_cmake_options()
-    # (Python-portable wheel); paired with --no-tests so Linux doesn't try to link `exec_`.
+    # PXR_PY_UNDEFINED_DYNAMIC_LOOKUP is added (macOS only) in build_usd_cmake_options();
+    # Linux links libpython by soname instead (portable, and lets the USD tools link).
     "-DPXR_ENABLE_MATERIALX_SUPPORT=TRUE",
     "-DPXR_ENABLE_GL_SUPPORT=TRUE",
     "-DPXR_BUILD_IMAGING=TRUE",
@@ -255,12 +255,15 @@ def build_usd_cmake_options(profile: str, materialx_dir: Path | None, args: argp
     if materialx_dir:
         opts.append(f"-DMaterialX_DIR={materialx_dir}")
 
-    # Build the pxr binaries WITHOUT linking a specific libpython so the wheel imports on
-    # any matching CPython (the goal validate_bundle.py enforces). On Linux this also
-    # requires NOT building tests: the boost.python `exec_` executable can't link with
-    # undefined Python symbols (handled by --no-tests in the full profile). macOS needs it
-    # for the python.org framework absolute path; Windows: Packages.cmake makes it a no-op.
-    opts.append("-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON")
+    # macOS ONLY: link the pxr binaries with -undefined dynamic_lookup instead of the
+    # python.org Python.framework (whose absolute path doesn't exist on a Homebrew/conda
+    # host), so the wheel imports on any CPython. On Linux this flag is NOT used: it would
+    # leave Python symbols undefined in the .so and then break linking the standalone USD
+    # executables (sdfdump, usdcat, the boost.python exec_, ...). Linux instead links
+    # libpython by its bare SONAME (libpython3.x.so.1.0), which is already portable — it
+    # resolves from the loaded interpreter, exactly like PyPI usd-core. Windows: no-op.
+    if sys.platform == "darwin":
+        opts.append("-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON")
 
     if args.enable_vulkan:
         opts.extend(["-DPXR_ENABLE_VULKAN_SUPPORT=TRUE"])
