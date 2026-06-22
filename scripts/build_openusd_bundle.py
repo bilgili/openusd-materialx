@@ -56,7 +56,11 @@ PROFILE_ARGS: dict[str, list[str]] = {
         "--tools",
         "--examples",
         "--tutorials",
-        "--tests",
+        # No tests: building them links the boost.python `exec_` executable, which fails on
+        # Linux under PXR_PY_UNDEFINED_DYNAMIC_LOOKUP (undefined Python symbols in an
+        # executable), and they install malformed test plugInfo fixtures. Tests aren't part
+        # of the distributable runtime.
+        "--no-tests",
         "--ptex",
         "--openimageio",
         "--opencolorio",
@@ -70,8 +74,8 @@ PROFILE_ARGS: dict[str, list[str]] = {
 
 FULL_USD_CMAKE_OPTIONS = [
     "-DPXR_ENABLE_PYTHON_SUPPORT=TRUE",
-    # PXR_PY_UNDEFINED_DYNAMIC_LOOKUP is added per-platform in build_usd_cmake_options()
-    # (macOS only) — on Linux it breaks linking the boost.python `exec_` executable.
+    # PXR_PY_UNDEFINED_DYNAMIC_LOOKUP is added unconditionally in build_usd_cmake_options()
+    # (Python-portable wheel); paired with --no-tests so Linux doesn't try to link `exec_`.
     "-DPXR_ENABLE_MATERIALX_SUPPORT=TRUE",
     "-DPXR_ENABLE_GL_SUPPORT=TRUE",
     "-DPXR_BUILD_IMAGING=TRUE",
@@ -80,7 +84,7 @@ FULL_USD_CMAKE_OPTIONS = [
     "-DPXR_BUILD_USD_TOOLS=TRUE",
     "-DPXR_BUILD_EXAMPLES=TRUE",
     "-DPXR_BUILD_TUTORIALS=TRUE",
-    "-DPXR_BUILD_TESTS=TRUE",
+    "-DPXR_BUILD_TESTS=FALSE",  # see --no-tests note: tests break Linux link + ship bad plugInfo
     "-DPXR_ENABLE_PTEX_SUPPORT=TRUE",
     "-DPXR_BUILD_OPENIMAGEIO_PLUGIN=TRUE",
     "-DPXR_BUILD_OPENCOLORIO_PLUGIN=TRUE",
@@ -251,14 +255,12 @@ def build_usd_cmake_options(profile: str, materialx_dir: Path | None, args: argp
     if materialx_dir:
         opts.append(f"-DMaterialX_DIR={materialx_dir}")
 
-    # Make the pxr binaries Python-portable on macOS only. The CI's python.org /
-    # actions-setup-python framework lives at an absolute path that doesn't exist on a
-    # Homebrew/conda host, so without dynamic_lookup the wheel fails to import there.
-    # Linux already resolves Python symbols across interpreters via the libpython soname,
-    # and forcing this on Linux breaks linking the boost.python `exec_` executable
-    # ("undefined reference to PyCMethod_New"). Windows: Packages.cmake makes it a no-op.
-    if sys.platform == "darwin":
-        opts.append("-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON")
+    # Build the pxr binaries WITHOUT linking a specific libpython so the wheel imports on
+    # any matching CPython (the goal validate_bundle.py enforces). On Linux this also
+    # requires NOT building tests: the boost.python `exec_` executable can't link with
+    # undefined Python symbols (handled by --no-tests in the full profile). macOS needs it
+    # for the python.org framework absolute path; Windows: Packages.cmake makes it a no-op.
+    opts.append("-DPXR_PY_UNDEFINED_DYNAMIC_LOOKUP=ON")
 
     if args.enable_vulkan:
         opts.extend(["-DPXR_ENABLE_VULKAN_SUPPORT=TRUE"])
