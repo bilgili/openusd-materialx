@@ -237,11 +237,16 @@ def make_bundle_self_contained(package_usd_dir: Path, install_dir: Path) -> None
                 continue
             if not cur:
                 continue
-            kept = [e for e in cur.split(":") if e and not any(e.startswith(b) for b in bad_rpaths)]
+            # Keep only $ORIGIN-relative RPATHs. Drop every absolute entry: the build prefix
+            # (<install>/lib), but also the build interpreter's lib dir that OpenUSD bakes in
+            # (e.g. /opt/hostedtoolcache/Python/3.x/x64/lib) — that path doesn't exist on a
+            # user's machine and makes the wheel non-portable. Bundled libs resolve each other
+            # via $ORIGIN; libpython resolves from the loaded interpreter via its DT_NEEDED soname.
+            kept = [e for e in cur.split(":") if e and (e.startswith("$ORIGIN") or e.startswith("${ORIGIN}"))]
             if kept != cur.split(":"):
                 subprocess.run([patchelf, "--set-rpath", ":".join(kept), str(f)], stderr=subprocess.DEVNULL)
                 changed += 1
-        print(f"Relocated {changed} bundled binaries to be self-contained (removed build-prefix RPATH)")
+        print(f"Relocated {changed} bundled binaries to be self-contained (kept only $ORIGIN RPATHs)")
 
 
 def build_usd_cmake_options(profile: str, materialx_dir: Path | None, args: argparse.Namespace) -> list[str]:
